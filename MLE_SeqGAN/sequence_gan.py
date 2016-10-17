@@ -56,6 +56,8 @@ class PoemGen(model.LSTM):
 
 
 def get_trainable_model(num_emb):
+    # go to pretrain_experiment.py, also check model.py
+    # PoemGen takes model.LSTM as a argument
     return PoemGen(num_emb, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, START_TOKEN)
 
 
@@ -66,7 +68,7 @@ def generate_samples(sess, trainable_model, batch_size, generated_num, output_fi
     for _ in range(int(generated_num / batch_size)):
         generated_samples.extend(trainable_model.generate(sess))
     end = time.time()
-    # print 'Sample generation time:', (end - start)
+    print 'Sample generation time:', (end - start)
 
     with open(output_file, 'w') as fout:
         for poem in generated_samples:
@@ -125,10 +127,23 @@ def main():
     dis_data_loader = Dis_dataloader()
 
     best_score = 1000
+
+    # initialize a LSTM object and use the LSTM object to initialize PoemGen object 
     generator = get_trainable_model(vocab_size)
+
+    # cPickle is a object serialization library
+
+    # the loaded picle object will be an array of numbers
+    # later, these params will be used to initalize the target LSTM
     target_params = cPickle.load(open('save/target_params.pkl'))
+    # print target_params
+
+    time.sleep(1000)
+
+    # This seems like the generator model which used RNN
     target_lstm = TARGET_LSTM(vocab_size, 64, 32, 32, 20, 0, target_params)
 
+    # This is the discriminator which uses CNN
     with tf.variable_scope('discriminator'):
         cnn = TextCNN(
             sequence_length=20,
@@ -157,6 +172,7 @@ def main():
 
     log = open('log/experiment-log.txt', 'w')
     #  pre-train generator
+    # Initialize the generator with MLE estimators
     print 'Start pre-training...'
     log.write('pre-training...\n')
     for epoch in xrange(PRE_EPOCH_NUM):
@@ -216,6 +232,8 @@ def main():
             _, g_loss = sess.run([generator.g_updates, generator.g_loss], feed_dict=feed)
 
         if total_batch % 1 == 0 or total_batch == TOTAL_BATCH - 1:
+            # The trainable model 'generator' is a RNN model from PoemGen
+            
             generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
             likelihood_data_loader.create_batches(eval_file)
             test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
@@ -228,6 +246,7 @@ def main():
                 print 'best score: ', test_loss
                 significance_test(sess, target_lstm, likelihood_data_loader, 'significance/seqgan.txt')
 
+        # rollout policy???
         rollout.update_params()
 
         # generate for discriminator
